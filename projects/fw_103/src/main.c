@@ -10,18 +10,50 @@
 */
 
 #include <stdio.h>
-
 #include "log.h"
 #include "tasks.h"
+#include "delay.h"
+#include "gpio.h"  
+#include "ads1115.h"
 
-int main() {
-  tasks_init();
-  log_init();
-  gpio_init();
-  LOG_DEBUG("Welcome to FW 103!\n");
+// Define GPIO for LED
+GpioAddress led_addr = {
+  .port = GPIO_PORT_B,
+  .pin = 3,
+};
 
-  tasks_start();
+// Define GPIO for ADS1115 "ready" pin
+GpioAddress ready_pin = {
+  .port = GPIO_PORT_B,
+  .pin = 0,  
+};
 
-  LOG_DEBUG("exiting main?\n");
+// LED toggle task
+TASK(run_leds, TASK_STACK_512) {
+  gpio_init_pin(&led_addr, GPIO_OUTPUT_PUSH_PULL, GPIO_STATE_HIGH);  // Configure LED pin as output
+
+  ADS1115_Config config = {
+    .i2c_addr = ADS1115_ADDR_GND,
+    .i2c_port = ADS1115_I2C_PORT,
+    .ready_pin = &ready_pin,
+    .handler_task = run_leds, 
+  };
+
+
+  while (true) {
+    gpio_toggle_state(&led_addr);
+    delay_ms(1000);
+  }
+}
+
+int main(void) {
+  gpio_init();     
+  log_init();      
+  tasks_init();    
+
+  tasks_init_task(run_leds, TASK_PRIORITY(1), NULL);
+
+  tasks_start();   // Start the FreeRTOS-style scheduler
+
   return 0;
 }
